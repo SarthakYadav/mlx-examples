@@ -2,7 +2,7 @@
 
 -> Device: Macbook M1 Pro (16 GB)
 
-### Flat out benchmarks
+### Benchmarks
 Following table contains training and inference throughput (images/sec) for PyTorch ([main_pytorch.py](main_pytorch.py)) and MLX ([main.py](main.py)), averaged over 5 epochs.
 
 | Model     	| PyTorch<br>Train 	| PyTorch<br>Inference 	| MLX<br>Train 	| MLX<br>Inference 	|
