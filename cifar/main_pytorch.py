@@ -1,11 +1,11 @@
 import argparse
 import time
+
 # import resnet
 import resnet_pytorch
 import torch
 import torch.nn as nn
 from dataset import get_cifar10
-
 
 parser = argparse.ArgumentParser(add_help=True)
 parser.add_argument(
@@ -45,7 +45,7 @@ def train_epoch(model, train_iter, optimizer, epoch, device):
         acc = torch.sum(torch.argmax(output, axis=1) == y) / y.shape[0]
         loss = loss.item()
         acc = acc.item()
-        toc = time.perf_counter()    
+        toc = time.perf_counter()
         losses.append(loss)
         accs.append(acc)
         throughput = x.shape[0] / (toc - tic)
@@ -87,7 +87,6 @@ def test_epoch(model, test_iter, device):
     return mean_acc, samples_per_sec
 
 
-
 def main(args):
     # torch.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -99,7 +98,9 @@ def main(args):
 
     train_data, test_data = get_cifar10(args.batch_size)
     for epoch in range(args.epochs):
-        tr_loss, tr_acc, throughput = train_epoch(model, train_data, optimizer, epoch, args.device)
+        tr_loss, tr_acc, throughput = train_epoch(
+            model, train_data, optimizer, epoch, args.device
+        )
         print(
             " | ".join(
                 (
@@ -112,7 +113,9 @@ def main(args):
         )
 
         test_acc, test_throughput = test_epoch(model, test_data, args.device)
-        print(f"Epoch: {epoch} | Test acc {test_acc.item():.3f} | Throughput: {test_throughput.item():.2f} images/sec")
+        print(
+            f"Epoch: {epoch} | Test acc {test_acc.item():.3f} | Throughput: {test_throughput.item():.2f} images/sec"
+        )
 
         train_data.reset()
         test_data.reset()

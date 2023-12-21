@@ -1,4 +1,5 @@
 from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -126,9 +127,13 @@ class KWT(nn.Module):
         self.patch_embedding = nn.Conv2d(
             in_channels, dim, kernel_size=patch_res, stride=patch_res
         )
-        self.pos_embedding = nn.Parameter(nn.init.trunc_normal_(torch.empty(self.num_patches + 1, dim), std=.02))
+        self.pos_embedding = nn.Parameter(
+            nn.init.trunc_normal_(torch.empty(self.num_patches + 1, dim), std=0.02)
+        )
         # self.cls_token = mx.random.truncated_normal(-0.01, 0.01, (dim,))
-        self.cls_token = nn.Parameter(nn.init.trunc_normal_(torch.empty(1, 1, dim), std=.02))
+        self.cls_token = nn.Parameter(
+            nn.init.trunc_normal_(torch.empty(1, 1, dim), std=0.02)
+        )
         self.dropout = nn.Dropout(emb_dropout)
         self.transformer = Transformer(dim, depth, heads, mlp_dim, dropout)
         self.pool = pool
@@ -141,7 +146,7 @@ class KWT(nn.Module):
         x = x.reshape(x.shape[0], -1, self.dim)
         assert x.shape[1] == self.num_patches
         cls_tokens = torch.broadcast_to(self.cls_token, (x.shape[0], 1, self.dim))
-        
+
         x = torch.cat((cls_tokens, x), dim=1)
 
         x = x + self.pos_embedding

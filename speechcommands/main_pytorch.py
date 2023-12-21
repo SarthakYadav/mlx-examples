@@ -1,9 +1,10 @@
 import argparse
 import time
+
+import kwt_pytorch
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import kwt_pytorch
 from mlx.data.datasets import load_speechcommands
 from mlx.data.features import mfsc
 
@@ -118,7 +119,9 @@ def main(args):
     model = getattr(kwt_pytorch, args.arch)()
     model = model.to(args.device)
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4
+    )
 
     train_data = prepare_dataset(args.batch_size, "train")
     val_data = prepare_dataset(args.batch_size, "validation")
@@ -127,7 +130,9 @@ def main(args):
     best_acc = 0.0
     best_epoch = 0
     for epoch in range(args.epochs):
-        tr_loss, tr_acc, throughput = train_epoch(model, train_data, optimizer, epoch, args.device)
+        tr_loss, tr_acc, throughput = train_epoch(
+            model, train_data, optimizer, epoch, args.device
+        )
         print(
             " | ".join(
                 (
