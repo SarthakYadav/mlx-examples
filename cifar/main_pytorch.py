@@ -1,9 +1,9 @@
 import argparse
 import time
-import resnet
-import mlx.nn as nn
-import mlx.core as mx
-import mlx.optimizers as optim
+# import resnet
+import resnet_pytorch
+import torch
+import torch.nn as nn
 from dataset import get_cifar10
 
 
@@ -23,32 +23,29 @@ parser.add_argument("--cpu", action="store_true", help="use cpu only")
 
 
 def eval_fn(model, inp, tgt):
-    return mx.mean(mx.argmax(model(inp), axis=1) == tgt)
+    with torch.no_grad():
+        return torch.sum(torch.argmax(model(inp), axis=1) == tgt) / tgt.shape[0]
 
 
-def train_epoch(model, train_iter, optimizer, epoch):
-    def train_step(model, inp, tgt):
-        output = model(inp)
-        loss = mx.mean(nn.losses.cross_entropy(output, tgt))
-        acc = mx.mean(mx.argmax(output, axis=1) == tgt)
-        return loss, acc
-
-    train_step_fn = nn.value_and_grad(model, train_step)
-
+def train_epoch(model, train_iter, optimizer, epoch, device):
     losses = []
     accs = []
     samples_per_sec = []
 
+    model.train()
     for batch_counter, batch in enumerate(train_iter):
-        x = mx.array(batch["image"])
-        y = mx.array(batch["label"])
+        x = torch.from_numpy(batch["image"]).to(device).permute(0, 3, 1, 2)
+        y = torch.from_numpy(batch["label"]).to(device)
         tic = time.perf_counter()
-        (loss, acc), grads = train_step_fn(model, x, y)
-        optimizer.update(model, grads)
-        mx.eval(model.parameters(), optimizer.state)
+        output = model(x)
+        loss = nn.functional.cross_entropy(output, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        acc = torch.sum(torch.argmax(output, axis=1) == y) / y.shape[0]
         loss = loss.item()
         acc = acc.item()
-        toc = time.perf_counter()
+        toc = time.perf_counter()    
         losses.append(loss)
         accs.append(acc)
         throughput = x.shape[0] / (toc - tic)
@@ -65,18 +62,19 @@ def train_epoch(model, train_iter, optimizer, epoch):
                 )
             )
 
-    mean_tr_loss = mx.mean(mx.array(losses))
-    mean_tr_acc = mx.mean(mx.array(accs))
-    samples_per_sec = mx.mean(mx.array(samples_per_sec))
+    mean_tr_loss = torch.mean(torch.Tensor(losses))
+    mean_tr_acc = torch.mean(torch.Tensor(accs))
+    samples_per_sec = torch.mean(torch.Tensor(samples_per_sec))
     return mean_tr_loss, mean_tr_acc, samples_per_sec
 
 
-def test_epoch(model, test_iter, epoch):
+def test_epoch(model, test_iter, device):
+    model.eval()
     accs = []
     samples_per_sec = []
     for batch_counter, batch in enumerate(test_iter):
-        x = mx.array(batch["image"])
-        y = mx.array(batch["label"])
+        x = torch.from_numpy(batch["image"]).to(device).permute(0, 3, 1, 2)
+        y = torch.from_numpy(batch["label"]).to(device)
         tic = time.perf_counter()
         acc = eval_fn(model, x, y)
         acc_value = acc.item()
@@ -84,23 +82,24 @@ def test_epoch(model, test_iter, epoch):
         throughput = x.shape[0] / (toc - tic)
         samples_per_sec.append(throughput)
         accs.append(acc_value)
-    mean_acc = mx.mean(mx.array(accs))
-    samples_per_sec = mx.mean(mx.array(samples_per_sec))
+    mean_acc = torch.mean(torch.Tensor(accs))
+    samples_per_sec = torch.mean(torch.Tensor(samples_per_sec))
     return mean_acc, samples_per_sec
 
 
+
 def main(args):
-    mx.random.seed(args.seed)
+    # torch.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
-    model = getattr(resnet, args.arch)()
+    model = getattr(resnet_pytorch, args.arch)()
+    model = model.to(args.device)
 
-    print("Number of params: {:0.04f} M".format(model.num_params() / 1e6))
-
-    optimizer = optim.Adam(learning_rate=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     train_data, test_data = get_cifar10(args.batch_size)
     for epoch in range(args.epochs):
-        tr_loss, tr_acc, throughput = train_epoch(model, train_data, optimizer, epoch)
+        tr_loss, tr_acc, throughput = train_epoch(model, train_data, optimizer, epoch, args.device)
         print(
             " | ".join(
                 (
@@ -112,10 +111,8 @@ def main(args):
             )
         )
 
-        test_acc, test_throughput = test_epoch(model, test_data, epoch)
-        print(
-            f"Epoch: {epoch} | Test acc {test_acc.item():.3f} | Throughput: {test_throughput.item():.2f} images/sec"
-        )
+        test_acc, test_throughput = test_epoch(model, test_data, args.device)
+        print(f"Epoch: {epoch} | Test acc {test_acc.item():.3f} | Throughput: {test_throughput.item():.2f} images/sec")
 
         train_data.reset()
         test_data.reset()
@@ -124,5 +121,8 @@ def main(args):
 if __name__ == "__main__":
     args = parser.parse_args()
     if args.cpu:
-        mx.set_default_device(mx.cpu)
+        device = torch.device("cpu")
+    else:
+        device = torch.device("mps")
+    args.device = device
     main(args)
